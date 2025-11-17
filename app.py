@@ -4,22 +4,65 @@ import re
 import subprocess
 import shutil
 import platform
-from transformers import pipeline
-from gtts import gTTS
 import tempfile
-import numpy as np
-# Audio processing imports with fallback
+import sys
+
+# Core imports with error handling
 try:
-    from pydub import AudioSegment
-    from pydub.effects import speedup, normalize
-    PYDUB_AVAILABLE = True
-except ImportError as e:
-    PYDUB_AVAILABLE = False
-    AudioSegment = None
-    speedup = None
-    normalize = None
+    import numpy as np
+except ImportError:
+    np = None
     import warnings
-    warnings.warn(f"pydub not available: {e}. Some audio processing features may be limited.")
+    warnings.warn("numpy is required but not installed")
+
+try:
+    from transformers import pipeline
+except ImportError as e:
+    pipeline = None
+    import warnings
+    warnings.warn(f"transformers library is required but not installed: {e}")
+
+try:
+    from gtts import gTTS
+except ImportError as e:
+    gTTS = None
+    import warnings
+    warnings.warn(f"gTTS library is required but not installed: {e}")
+# Audio processing - LAZY IMPORTS ONLY
+# pydub is imported only when needed to avoid any startup errors
+# This function safely imports pydub and returns availability status
+def _get_pydub():
+    """Lazy import of pydub - only imports when actually needed"""
+    global _pydub_cache
+    if _pydub_cache is None:
+        _pydub_cache = {'available': False, 'AudioSegment': None, 'speedup': None, 'normalize': None}
+        try:
+            # Check if audioop is available first (Python 3.11 has it built-in)
+            try:
+                import audioop
+            except ImportError:
+                # Try pyaudioop as fallback (but don't require it)
+                try:
+                    import pyaudioop  # type: ignore
+                except ImportError:
+                    return _pydub_cache  # No audioop available, pydub won't work
+            
+            # Now try to import pydub
+            from pydub import AudioSegment  # type: ignore
+            from pydub.effects import speedup, normalize  # type: ignore
+            _pydub_cache = {
+                'available': True,
+                'AudioSegment': AudioSegment,
+                'speedup': speedup,
+                'normalize': normalize
+            }
+        except Exception:
+            # pydub not available or failed to import - that's OK
+            pass
+    return _pydub_cache
+
+# Initialize cache
+_pydub_cache = None
 from io import BytesIO
 from datetime import datetime
 
@@ -79,10 +122,16 @@ st.set_page_config(
 @st.cache_resource
 def load_emotion_model():
     """Load the emotion classification model"""
+    if pipeline is None:
+        return None
     try:
         # Use CPU for Streamlit Cloud compatibility
-        import torch
-        device = -1  # -1 means CPU (works on all platforms)
+        try:
+            import torch
+            device = -1  # -1 means CPU (works on all platforms)
+        except ImportError:
+            device = -1  # Default to CPU if torch not available
+        
         classifier = pipeline(
             "text-classification",
             model="j-hartmann/emotion-english-distilroberta-base",
@@ -116,7 +165,7 @@ def find_ffmpeg_path():
             r"C:\ffmpeg\bin\ffmpeg.exe",
             r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
             r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
-            os.path.join(os.environ.get("USERPROFILE", ""), "ffmpeg", "bin", "ffmpeg.exe"),
+            os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "ffmpeg", "bin", "ffmpeg.exe"),
         ]
     elif system == "Linux":
         # Linux common paths (including Streamlit Cloud)
@@ -157,23 +206,27 @@ def check_ffmpeg():
                 [ffmpeg_path, "-version"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                check=False  # Don't raise exception on non-zero return
             )
             if result.returncode == 0:
                 # If found in common path but not in PATH, add it to current session (Windows only)
                 if platform.system() == "Windows":
                     try:
                         bin_dir = os.path.dirname(ffmpeg_path)
-                        current_path = os.environ.get("PATH", "")
-                        if bin_dir not in current_path:
-                            # Add to current session PATH
-                            os.environ["PATH"] = bin_dir + os.pathsep + current_path
-                            # Also set for subprocess calls
-                            if hasattr(os, 'add_dll_directory') and os.path.exists(bin_dir):
-                                try:
-                                    os.add_dll_directory(bin_dir)
-                                except:
-                                    pass
+                        try:
+                            current_path = os.environ.get("PATH", "")
+                            if bin_dir not in current_path:
+                                # Add to current session PATH
+                                os.environ["PATH"] = bin_dir + os.pathsep + current_path
+                        except Exception:
+                            pass  # Continue even if PATH update fails
+                        # Also set for subprocess calls
+                        if hasattr(os, 'add_dll_directory') and os.path.exists(bin_dir):
+                            try:
+                                os.add_dll_directory(bin_dir)
+                            except:
+                                pass
                     except Exception:
                         pass  # Continue even if PATH update fails
                 return True, None
@@ -714,9 +767,10 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
                     audio_path = generate_speech_pyttsx3(text, voice_gender)
                     if audio_path and os.path.exists(audio_path):
                         # Convert WAV to MP3 if possible, otherwise return WAV
-                        if PYDUB_AVAILABLE:
+                        pydub = _get_pydub()
+                        if pydub['available']:
                             try:
-                                audio = AudioSegment.from_wav(audio_path)
+                                audio = pydub['AudioSegment'].from_wav(audio_path)
                                 mp3_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
                                 mp3_path.close()
                                 audio.export(mp3_path.name, format="mp3")
@@ -749,11 +803,13 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             return None
         
         # Determine file format and load audio
-        if not PYDUB_AVAILABLE:
+        pydub = _get_pydub()
+        if not pydub['available']:
             st.warning("Audio processing (pydub) is not available. Returning audio file without emotion modulation.")
             return audio_file
         
         try:
+            AudioSegment = pydub['AudioSegment']
             if audio_file.endswith('.wav'):
                 audio = AudioSegment.from_wav(audio_file)
             elif audio_file.endswith('.mp3'):
@@ -788,8 +844,8 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             # Speed up or slow down
             if params["speed"] > 1.0:
                 # Use speedup for faster playback
-                if speedup is not None:
-                    audio = speedup(audio, playback_speed=params["speed"])
+                if pydub['speedup'] is not None:
+                    audio = pydub['speedup'](audio, playback_speed=params["speed"])
                 else:
                     # Fallback: adjust frame rate
                     original_frame_rate = audio.frame_rate
@@ -820,8 +876,8 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             audio = adjust_audio_pitch(audio, params["pitch_shift"])
         
         # Normalize audio
-        if normalize is not None:
-            audio = normalize(audio)
+        if pydub['normalize'] is not None:
+            audio = pydub['normalize'](audio)
         
         # Save processed audio
         output_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')

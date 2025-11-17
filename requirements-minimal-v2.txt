@@ -1,0 +1,14 @@
+# Ultra-minimal requirements - try this if main requirements.txt fails
+# This removes torch explicitly (transformers will install it)
+
+streamlit
+transformers
+gtts
+numpy
+requests
+pdfplumber
+python-docx
+reportlab
+pandas
+deep-translator
+
