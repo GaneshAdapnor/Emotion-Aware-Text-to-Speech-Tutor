@@ -8,10 +8,12 @@ import tempfile
 import sys
 
 # Core imports with error handling
+# These are required - if they fail, we'll handle it gracefully
 try:
     import numpy as np
 except ImportError:
     np = None
+    # Don't use st.error here as Streamlit might not be ready yet
     import warnings
     warnings.warn("numpy is required but not installed")
 
