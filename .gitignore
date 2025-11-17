@@ -34,7 +34,8 @@ ENV/
 *~
 
 # Streamlit
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 
 # Audio files
 *.mp3

@@ -8,8 +8,18 @@ from transformers import pipeline
 from gtts import gTTS
 import tempfile
 import numpy as np
-from pydub import AudioSegment
-from pydub.effects import speedup, normalize
+# Audio processing imports with fallback
+try:
+    from pydub import AudioSegment
+    from pydub.effects import speedup, normalize
+    PYDUB_AVAILABLE = True
+except ImportError as e:
+    PYDUB_AVAILABLE = False
+    AudioSegment = None
+    speedup = None
+    normalize = None
+    import warnings
+    warnings.warn(f"pydub not available: {e}. Some audio processing features may be limited.")
 from io import BytesIO
 from datetime import datetime
 
@@ -70,14 +80,21 @@ st.set_page_config(
 def load_emotion_model():
     """Load the emotion classification model"""
     try:
+        # Use CPU for Streamlit Cloud compatibility
+        import torch
+        device = -1  # -1 means CPU (works on all platforms)
         classifier = pipeline(
             "text-classification",
             model="j-hartmann/emotion-english-distilroberta-base",
-            top_k=1
+            top_k=1,
+            device=device
         )
         return classifier
     except Exception as e:
-        st.error(f"Error loading emotion model: {e}")
+        # Don't show error in UI during import, just return None
+        # Error will be handled when model is actually used
+        import warnings
+        warnings.warn(f"Error loading emotion model: {e}")
         return None
 
 # Global variable to cache FFmpeg path
@@ -91,14 +108,28 @@ def find_ffmpeg_path():
     if _ffmpeg_path_cache is not None:
         return _ffmpeg_path_cache
     
-    # Common Windows installation paths
+    # Common installation paths (platform-specific)
     common_paths = []
-    if platform.system() == "Windows":
+    system = platform.system()
+    if system == "Windows":
         common_paths = [
             r"C:\ffmpeg\bin\ffmpeg.exe",
             r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
             r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
             os.path.join(os.environ.get("USERPROFILE", ""), "ffmpeg", "bin", "ffmpeg.exe"),
+        ]
+    elif system == "Linux":
+        # Linux common paths (including Streamlit Cloud)
+        common_paths = [
+            "/usr/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+            "/opt/ffmpeg/bin/ffmpeg",
+        ]
+    elif system == "Darwin":  # macOS
+        common_paths = [
+            "/usr/local/bin/ffmpeg",
+            "/opt/homebrew/bin/ffmpeg",
+            "/usr/bin/ffmpeg",
         ]
     
     # First check if ffmpeg is in PATH
@@ -129,19 +160,22 @@ def check_ffmpeg():
                 timeout=5
             )
             if result.returncode == 0:
-                # If found in common path but not in PATH, add it to current session
+                # If found in common path but not in PATH, add it to current session (Windows only)
                 if platform.system() == "Windows":
-                    bin_dir = os.path.dirname(ffmpeg_path)
-                    current_path = os.environ.get("PATH", "")
-                    if bin_dir not in current_path:
-                        # Add to current session PATH
-                        os.environ["PATH"] = bin_dir + os.pathsep + current_path
-                        # Also set for subprocess calls
-                        if hasattr(os, 'add_dll_directory') and os.path.exists(bin_dir):
-                            try:
-                                os.add_dll_directory(bin_dir)
-                            except:
-                                pass
+                    try:
+                        bin_dir = os.path.dirname(ffmpeg_path)
+                        current_path = os.environ.get("PATH", "")
+                        if bin_dir not in current_path:
+                            # Add to current session PATH
+                            os.environ["PATH"] = bin_dir + os.pathsep + current_path
+                            # Also set for subprocess calls
+                            if hasattr(os, 'add_dll_directory') and os.path.exists(bin_dir):
+                                try:
+                                    os.add_dll_directory(bin_dir)
+                                except:
+                                    pass
+                    except Exception:
+                        pass  # Continue even if PATH update fails
                 return True, None
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
             pass
@@ -680,14 +714,17 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
                     audio_path = generate_speech_pyttsx3(text, voice_gender)
                     if audio_path and os.path.exists(audio_path):
                         # Convert WAV to MP3 if possible, otherwise return WAV
-                        try:
-                            audio = AudioSegment.from_wav(audio_path)
-                            mp3_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-                            mp3_path.close()
-                            audio.export(mp3_path.name, format="mp3")
-                            os.unlink(audio_path)
-                            return mp3_path.name
-                        except:
+                        if PYDUB_AVAILABLE:
+                            try:
+                                audio = AudioSegment.from_wav(audio_path)
+                                mp3_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+                                mp3_path.close()
+                                audio.export(mp3_path.name, format="mp3")
+                                os.unlink(audio_path)
+                                return mp3_path.name
+                            except:
+                                return audio_path
+                        else:
                             return audio_path
                 except Exception as e:
                     # Fallback to gTTS
@@ -712,6 +749,10 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             return None
         
         # Determine file format and load audio
+        if not PYDUB_AVAILABLE:
+            st.warning("Audio processing (pydub) is not available. Returning audio file without emotion modulation.")
+            return audio_file
+        
         try:
             if audio_file.endswith('.wav'):
                 audio = AudioSegment.from_wav(audio_file)
@@ -747,7 +788,17 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             # Speed up or slow down
             if params["speed"] > 1.0:
                 # Use speedup for faster playback
-                audio = speedup(audio, playback_speed=params["speed"])
+                if speedup is not None:
+                    audio = speedup(audio, playback_speed=params["speed"])
+                else:
+                    # Fallback: adjust frame rate
+                    original_frame_rate = audio.frame_rate
+                    new_sample_rate = int(original_frame_rate * params["speed"])
+                    audio = audio._spawn(
+                        audio.raw_data,
+                        overrides={"frame_rate": new_sample_rate}
+                    )
+                    audio = audio.set_frame_rate(original_frame_rate)
             else:
                 # Slow down by changing frame rate and then resampling
                 original_frame_rate = audio.frame_rate
@@ -769,7 +820,8 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
             audio = adjust_audio_pitch(audio, params["pitch_shift"])
         
         # Normalize audio
-        audio = normalize(audio)
+        if normalize is not None:
+            audio = normalize(audio)
         
         # Save processed audio
         output_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
