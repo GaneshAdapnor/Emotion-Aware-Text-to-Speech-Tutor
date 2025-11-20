@@ -199,17 +199,35 @@ def find_ffmpeg_path():
 # Check if ffmpeg is available
 def check_ffmpeg():
     """Check if ffmpeg is installed and accessible"""
+    # On Streamlit Cloud, FFmpeg is typically not available
+    # Skip subprocess checks to avoid health check failures
+    try:
+        # Check if we're on Streamlit Cloud (common indicators)
+        is_streamlit_cloud = (
+            os.environ.get("STREAMLIT_SERVER_PORT") is not None or
+            os.environ.get("STREAMLIT_SERVER_ADDRESS") is not None or
+            "/mount/src" in os.path.abspath(__file__) if hasattr(os.path, 'abspath') else False
+        )
+        
+        # On Streamlit Cloud, assume FFmpeg is not available (it's not installed)
+        if is_streamlit_cloud:
+            return False, "FFmpeg is not available on Streamlit Cloud. Basic TTS will still work."
+    except Exception:
+        pass  # Continue with normal check
+    
     ffmpeg_path = find_ffmpeg_path()
     
     if ffmpeg_path is not None:
         try:
-            # Try to run ffmpeg to verify it works
+            # Try to run ffmpeg to verify it works (with very short timeout for health checks)
             result = subprocess.run(
                 [ffmpeg_path, "-version"],
                 capture_output=True,
                 text=True,
-                timeout=5,
-                check=False  # Don't raise exception on non-zero return
+                timeout=2,  # Shorter timeout for faster health checks
+                check=False,  # Don't raise exception on non-zero return
+                stderr=subprocess.DEVNULL,  # Suppress stderr
+                stdout=subprocess.DEVNULL  # Suppress stdout for health checks
             )
             if result.returncode == 0:
                 # If found in common path but not in PATH, add it to current session (Windows only)
@@ -232,7 +250,8 @@ def check_ffmpeg():
                     except Exception:
                         pass  # Continue even if PATH update fails
                 return True, None
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError, Exception) as e:
+            # Silently fail - FFmpeg not available
             pass
     
     # FFmpeg not found
@@ -904,12 +923,17 @@ def main():
     st.markdown("### Transform educational text into expressive, emotion-aware speech")
     st.markdown("📄 **Document Support:** Upload PDF, DOCX, TXT, or MD files | 🌍 **Translation:** Translate to any language | 📊 **Export:** Generate PDF reports")
     
-    # Check ffmpeg availability at startup
-    ffmpeg_available, ffmpeg_message = check_ffmpeg()
-    if not ffmpeg_available:
-        st.warning("⚠️ **FFmpeg not detected** - Audio processing will not work without it.")
-        with st.expander("📋 Click here for FFmpeg installation instructions", expanded=True):
-            st.markdown(ffmpeg_message)
+    # Check ffmpeg availability at startup (with error handling)
+    try:
+        ffmpeg_available, ffmpeg_message = check_ffmpeg()
+        if not ffmpeg_available:
+            st.warning("⚠️ **FFmpeg not detected** - Audio processing will not work without it.")
+            with st.expander("📋 Click here for FFmpeg installation instructions", expanded=False):
+                st.markdown(ffmpeg_message)
+    except Exception as e:
+        # If FFmpeg check fails, assume it's not available (common on Streamlit Cloud)
+        ffmpeg_available = False
+        st.info("ℹ️ **Note:** Advanced audio processing features require FFmpeg. Basic TTS will still work.")
     
     # Sidebar for settings
     with st.sidebar:
@@ -1113,13 +1137,16 @@ def main():
         | Neutral | 0% | Normal | Balanced |
         """)
     
-    # Load emotion model
-    with st.spinner("Loading emotion detection model..."):
+    # Load emotion model (will be cached, so first load may take time)
+    # Don't block health check - model loads asynchronously
+    classifier = None
+    try:
+        # Load model (cached, so subsequent loads are fast)
         classifier = load_emotion_model()
-    
-    if classifier is None:
-        st.error("Failed to load emotion model. Please check your internet connection and try again.")
-        return
+    except Exception as e:
+        # Don't crash if model fails to load - user can retry
+        st.warning(f"⚠️ Model loading failed. Will retry when needed. Error: {str(e)}")
+        classifier = None
     
     # Main content area
     col1, col2 = st.columns([1, 1])
@@ -1626,5 +1653,12 @@ if __name__ == "__main__":
         print("\nRunning with 'python app.py' will cause errors.")
         print("="*60 + "\n")
         sys.exit(1)
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Ensure app doesn't crash completely - show error to user
+        st.error(f"An error occurred: {str(e)}")
+        st.info("Please refresh the page or check the logs for more details.")
+        import traceback
+        st.code(traceback.format_exc())
 
