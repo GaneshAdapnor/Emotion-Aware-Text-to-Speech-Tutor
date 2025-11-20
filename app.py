@@ -256,42 +256,40 @@ def check_ffmpeg():
     
     # FFmpeg not found
     return False, """
-    **FFmpeg is not installed or not in your system PATH.**
+    ### Quick Installation Guide
     
-    Audio processing requires FFmpeg. Please install it:
+    **FFmpeg is optional** - Basic text-to-speech works without it!
+    FFmpeg only enables advanced audio effects (pitch, speed, volume adjustments).
     
-    **For Windows:**
-    1. Download from: https://www.gyan.dev/ffmpeg/builds/
-    2. Download "ffmpeg-release-essentials.zip"
-    3. Extract to `C:\\ffmpeg` (or another location)
-    4. Add `C:\\ffmpeg\\bin` to your system PATH:
-       - Press `Win + X` → System → Advanced system settings
-       - Click "Environment Variables"
-       - Under "System variables", find "Path" and click "Edit"
-       - Click "New" and add: `C:\\ffmpeg\\bin`
-       - Click OK on all dialogs
-    5. **Restart your terminal/command prompt** and verify:
-       ```powershell
-       ffmpeg -version
-       ```
+    ---
     
-    **Alternative (Windows with Chocolatey):**
+    **Windows (Easiest - if you have Chocolatey):**
     ```powershell
     choco install ffmpeg
     ```
     
-    **For macOS:**
+    **Windows (Manual):**
+    1. Download: https://www.gyan.dev/ffmpeg/builds/ (get "ffmpeg-release-essentials.zip")
+    2. Extract to `C:\\ffmpeg`
+    3. Add to PATH:
+       - Press `Win + X` → System → Advanced system settings
+       - Environment Variables → System variables → Path → Edit
+       - Add: `C:\\ffmpeg\\bin`
+    4. Restart terminal and verify: `ffmpeg -version`
+    
+    **macOS:**
     ```bash
     brew install ffmpeg
     ```
     
-    **For Linux:**
+    **Linux:**
     ```bash
-    sudo apt-get update
-    sudo apt-get install ffmpeg
+    sudo apt-get update && sudo apt-get install ffmpeg
     ```
     
-    After installing, **restart this Streamlit app** for changes to take effect.
+    💡 **Tip:** Run `install_ffmpeg_simple.ps1` in PowerShell for automated Windows installation!
+    
+    After installing, restart this Streamlit app.
     """
 
 # Emotion to voice parameters mapping
@@ -924,16 +922,19 @@ def main():
     st.markdown("📄 **Document Support:** Upload PDF, DOCX, TXT, or MD files | 🌍 **Translation:** Translate to any language | 📊 **Export:** Generate PDF reports")
     
     # Check ffmpeg availability at startup (with error handling)
+    ffmpeg_message = ""
     try:
         ffmpeg_available, ffmpeg_message = check_ffmpeg()
         if not ffmpeg_available:
-            st.warning("⚠️ **FFmpeg not detected** - Audio processing will not work without it.")
-            with st.expander("📋 Click here for FFmpeg installation instructions", expanded=False):
-                st.markdown(ffmpeg_message)
+            # Show a less alarming message - FFmpeg is optional
+            st.info("ℹ️ **Note:** FFmpeg not detected. Basic text-to-speech works fine! FFmpeg is only needed for advanced audio effects (pitch/speed adjustments).")
+        else:
+            st.success("✅ FFmpeg detected - Full audio processing available!")
     except Exception as e:
         # If FFmpeg check fails, assume it's not available (common on Streamlit Cloud)
         ffmpeg_available = False
-        st.info("ℹ️ **Note:** Advanced audio processing features require FFmpeg. Basic TTS will still work.")
+        ffmpeg_message = "FFmpeg enables advanced audio processing features."
+        st.info("ℹ️ **Note:** Basic text-to-speech works without FFmpeg. Advanced audio features require FFmpeg.")
     
     # Sidebar for settings
     with st.sidebar:
@@ -941,11 +942,9 @@ def main():
         
         # Show ffmpeg status in sidebar
         if ffmpeg_available:
-            st.success("✅ FFmpeg is installed")
+            st.success("✅ FFmpeg installed - Full features")
         else:
-            st.error("❌ FFmpeg not found")
-            with st.expander("Install FFmpeg"):
-                st.markdown(ffmpeg_message)
+            st.info("ℹ️ FFmpeg optional - Basic TTS works")
         
         # Language selection for TTS
         st.markdown("### 🌍 Language Settings")
