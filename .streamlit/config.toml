@@ -1,4 +1,6 @@
 [server]
+# headless is set to true for Streamlit Cloud compatibility
+# Local scripts override this with --server.headless=false to auto-open browser
 headless = true
 port = 8501
 enableCORS = false
@@ -8,6 +10,7 @@ enableXsrfProtection = true
 gatherUsageStats = false
 serverAddress = "localhost"
 serverPort = 8501
+# Auto-open browser when running locally (overridden by command-line flags)
 
 [theme]
 primaryColor = "#1f77b4"

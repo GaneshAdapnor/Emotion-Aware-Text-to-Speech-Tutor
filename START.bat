@@ -15,14 +15,9 @@ echo   Press Ctrl+C to stop the app
 echo ========================================
 echo.
 
-REM Start Streamlit in background and wait for server to start
-start /B streamlit run app.py --server.headless=false --browser.gatherUsageStats=false
-
-REM Wait a few seconds for Streamlit to start
-timeout /t 3 /nobreak >nul
-
-REM Open in default browser (Streamlit should do this automatically, but ensure it opens)
-start http://localhost:8501
+REM Start Streamlit with auto-open browser (overrides config.toml headless setting)
+REM The --server.headless=false flag ensures browser opens automatically
+streamlit run app.py --server.headless=false --browser.gatherUsageStats=false --server.runOnSave=true
 
 echo.
 echo   Browser should be opening now!

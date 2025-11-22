@@ -12,16 +12,9 @@ echo.
 echo   Starting Streamlit...
 echo.
 
-REM Start Streamlit in background
-start /B streamlit run app.py --server.headless=false --browser.gatherUsageStats=false
-
-REM Wait for Streamlit to start
-echo   Waiting for server to start...
-timeout /t 5 /nobreak >nul
-
-REM Open in default browser
-echo   Opening in your default browser...
-start http://localhost:8501
+REM Start Streamlit with auto-open browser (overrides config.toml headless setting)
+REM The --server.headless=false flag ensures browser opens automatically
+streamlit run app.py --server.headless=false --browser.gatherUsageStats=false --server.runOnSave=true
 
 echo.
 echo   App is running in your default browser!

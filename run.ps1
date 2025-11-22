@@ -10,6 +10,7 @@ Write-Host "Press Ctrl+C to stop the app" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Run Streamlit (it will automatically open in default browser)
-streamlit run app.py --server.headless=false --browser.gatherUsageStats=false
+# Run Streamlit with auto-open browser (overrides config.toml headless setting)
+# The --server.headless=false flag ensures browser opens automatically in default browser
+streamlit run app.py --server.headless=false --browser.gatherUsageStats=false --server.runOnSave=true
 
