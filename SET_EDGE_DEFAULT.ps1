@@ -5,7 +5,7 @@ Write-Host "Setting Microsoft Edge as default browser for Streamlit..." -Foregro
 [System.Environment]::SetEnvironmentVariable("BROWSER", "msedge", "User")
 
 Write-Host ""
-Write-Host "✓ Microsoft Edge is now set as the default browser for Streamlit!" -ForegroundColor Green
+Write-Host "Microsoft Edge is now set as the default browser for Streamlit!" -ForegroundColor Green
 Write-Host ""
 Write-Host "This setting will persist across sessions." -ForegroundColor Cyan
 Write-Host "You can now run the app using:" -ForegroundColor Yellow
@@ -16,4 +16,3 @@ Write-Host "  - START.bat (double-click)" -ForegroundColor White
 Write-Host ""
 Write-Host "All scripts will now open in Microsoft Edge automatically!" -ForegroundColor Green
 Write-Host ""
-
