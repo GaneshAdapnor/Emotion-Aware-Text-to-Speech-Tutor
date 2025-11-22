@@ -220,35 +220,39 @@ def find_ffmpeg_path():
     _ffmpeg_path_cache = ffmpeg_path
     return ffmpeg_path
 
+# Check if we're on Streamlit Cloud
+def is_streamlit_cloud():
+    """Detect if running on Streamlit Cloud"""
+    try:
+        return (
+            os.environ.get("STREAMLIT_SERVER_PORT") is not None or
+            os.environ.get("STREAMLIT_SERVER_ADDRESS") is not None or
+            os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+            os.environ.get("STREAMLIT_SERVER_HEADLESS") is not None or
+            "/mount/src" in os.path.abspath(__file__) if hasattr(os.path, 'abspath') else False
+        )
+    except Exception:
+        return False
+
 # Check if ffmpeg is available
 def check_ffmpeg():
     """Check if ffmpeg is installed and accessible"""
     # On Streamlit Cloud, FFmpeg is typically not available
     # Skip subprocess checks to avoid health check failures
-    try:
-        # Check if we're on Streamlit Cloud (common indicators)
-        is_streamlit_cloud = (
-            os.environ.get("STREAMLIT_SERVER_PORT") is not None or
-            os.environ.get("STREAMLIT_SERVER_ADDRESS") is not None or
-            "/mount/src" in os.path.abspath(__file__) if hasattr(os.path, 'abspath') else False
-        )
-        
-        # On Streamlit Cloud, assume FFmpeg is not available (it's not installed)
-        if is_streamlit_cloud:
-            return False, "FFmpeg is not available on Streamlit Cloud. Basic TTS will still work."
-    except Exception:
-        pass  # Continue with normal check
+    if is_streamlit_cloud():
+        return False, "FFmpeg is not available on Streamlit Cloud. Basic TTS will still work."
     
     ffmpeg_path = find_ffmpeg_path()
     
     if ffmpeg_path is not None:
         try:
             # Try to run ffmpeg to verify it works (with very short timeout for health checks)
+            # Use a very short timeout to avoid blocking health checks
             result = subprocess.run(
                 [ffmpeg_path, "-version"],
                 capture_output=True,
                 text=True,
-                timeout=2,  # Shorter timeout for faster health checks
+                timeout=1,  # Very short timeout to avoid blocking
                 check=False,  # Don't raise exception on non-zero return
                 stderr=subprocess.DEVNULL,  # Suppress stderr
                 stdout=subprocess.DEVNULL  # Suppress stdout for health checks
@@ -948,16 +952,29 @@ def main():
     st.markdown("📄 **Document Support:** Upload PDF, DOCX, TXT, or MD files | 🌍 **Translation:** Translate to any language | 📊 **Export:** Generate PDF reports")
     
     # Check ffmpeg availability at startup (with error handling)
+    # Skip blocking checks on Streamlit Cloud to avoid health check failures
     ffmpeg_message = ""
     try:
-        ffmpeg_available, ffmpeg_message = check_ffmpeg()
-        if not ffmpeg_available:
-            # Show a less alarming message - FFmpeg is optional
-            st.info("ℹ️ **Note:** FFmpeg not detected. Basic text-to-speech works fine! FFmpeg is only needed for advanced audio effects (pitch/speed adjustments).")
+        # On Streamlit Cloud, skip FFmpeg check entirely to avoid blocking health checks
+        if is_streamlit_cloud():
+            ffmpeg_available = False
+            ffmpeg_message = "FFmpeg is not available on Streamlit Cloud. Basic TTS will still work."
+            st.info("ℹ️ **Note:** FFmpeg not available on Streamlit Cloud. Basic text-to-speech works fine! FFmpeg is only needed for advanced audio effects.")
         else:
-            st.success("✅ FFmpeg detected - Full audio processing available!")
+            # Local deployment - check FFmpeg (but don't block)
+            try:
+                ffmpeg_available, ffmpeg_message = check_ffmpeg()
+                if not ffmpeg_available:
+                    st.info("ℹ️ **Note:** FFmpeg not detected. Basic text-to-speech works fine! FFmpeg is only needed for advanced audio effects (pitch/speed adjustments).")
+                else:
+                    st.success("✅ FFmpeg detected - Full audio processing available!")
+            except Exception:
+                # If check fails, assume not available
+                ffmpeg_available = False
+                ffmpeg_message = "FFmpeg enables advanced audio processing features."
+                st.info("ℹ️ **Note:** Basic text-to-speech works without FFmpeg. Advanced audio features require FFmpeg.")
     except Exception as e:
-        # If FFmpeg check fails, assume it's not available (common on Streamlit Cloud)
+        # If anything fails, assume FFmpeg is not available (common on Streamlit Cloud)
         ffmpeg_available = False
         ffmpeg_message = "FFmpeg enables advanced audio processing features."
         st.info("ℹ️ **Note:** Basic text-to-speech works without FFmpeg. Advanced audio features require FFmpeg.")
