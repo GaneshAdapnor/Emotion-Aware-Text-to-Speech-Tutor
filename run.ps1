@@ -6,6 +6,10 @@ Write-Host ""
 Write-Host "Starting Streamlit app..." -ForegroundColor Yellow
 Write-Host "The app will open automatically in your browser!" -ForegroundColor Green
 Write-Host ""
+
+# Set Edge as default browser for this session
+$env:BROWSER = "msedge"
+
 Write-Host "Press Ctrl+C to stop the app" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
