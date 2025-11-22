@@ -21,6 +21,11 @@ pandas>=2.0.0
 # Translation
 deep-translator>=1.11.4
 
+# Audio Processing (optional but recommended)
+pydub>=0.25.1
+
+# Text-to-Speech (optional - for voice selection)
+pyttsx3>=2.90
+
 # Utilities
 requests>=2.31.0
-

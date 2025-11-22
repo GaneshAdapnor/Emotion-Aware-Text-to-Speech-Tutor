@@ -1,9 +1,12 @@
 [server]
-headless = false
+headless = true
 port = 8501
 enableCORS = false
 enableXsrfProtection = true
-runOnSave = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
 
 [theme]
 primaryColor = "#1f77b4"
@@ -11,12 +14,3 @@ backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f0f2f6"
 textColor = "#262730"
 font = "sans serif"
-
-[browser]
-gatherUsageStats = false
-serverAddress = "localhost"
-serverPort = 8501
-
-[runner]
-fastReruns = true
-magicEnabled = true

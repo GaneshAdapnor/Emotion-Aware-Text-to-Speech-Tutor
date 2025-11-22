@@ -113,6 +113,30 @@ try:
 except ImportError:
     TRANSLATOR_AVAILABLE = False
 
+# Supported languages for translation & TTS
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "hi": "Hindi",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ru": "Russian"
+}
+
+GTT_LANGUAGE_MAP = {
+    "zh": "zh-cn"
+}
+
+
+def get_tts_language_code(lang_code: str) -> str:
+    """Map display language codes to gTTS compatible codes"""
+    if not lang_code:
+        return "en"
+    return GTT_LANGUAGE_MAP.get(lang_code.lower(), lang_code.lower())
+
 # Page configuration
 st.set_page_config(
     page_title="Emotion-Aware Text-to-Speech Tutor",
@@ -664,10 +688,11 @@ def get_available_voices():
 def generate_speech_with_voice(text, voice_gender='female', lang='en', use_pyttsx3=True, prefer_gtts=False):
     """Generate speech using pyttsx3 with voice selection or fallback to gTTS"""
     try:
+        tts_lang = get_tts_language_code(lang)
         # If prefer_gtts is True (e.g., for translated text), use gTTS directly
         # gTTS supports many languages better than pyttsx3
         if prefer_gtts:
-            tts = gTTS(text=text, lang=lang, slow=False)
+            tts = gTTS(text=text, lang=tts_lang, slow=False)
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
                 tts.save(tmp_file.name)
             return tmp_file.name
@@ -683,7 +708,7 @@ def generate_speech_with_voice(text, voice_gender='female', lang='en', use_pytts
                 except:
                     pass
             # Use gTTS as fallback
-            tts = gTTS(text=text, lang=lang, slow=False)
+            tts = gTTS(text=text, lang=tts_lang, slow=False)
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
                 tts.save(tmp_file.name)
             return tmp_file.name
@@ -697,7 +722,7 @@ def generate_speech_with_voice(text, voice_gender='female', lang='en', use_pytts
                 st.warning(f"pyttsx3 failed: {e}. Falling back to gTTS...")
         
         # Use gTTS for all languages (better language support)
-        tts = gTTS(text=text, lang=lang, slow=False)
+        tts = gTTS(text=text, lang=tts_lang, slow=False)
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
             tts.save(tmp_file.name)
         return tmp_file.name
@@ -804,7 +829,8 @@ def generate_emotional_speech(text, emotion, lang='en', slow=False, voice_gender
                     pass
             # Use gTTS directly if ffmpeg not available (for non-English languages or when prefer_gtts is True)
             if prefer_gtts or lang != 'en':
-                tts = gTTS(text=text, lang=lang, slow=slow)
+                tts_lang_direct = get_tts_language_code(lang)
+                tts = gTTS(text=text, lang=tts_lang_direct, slow=slow)
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
                     tts.save(tmp_file.name)
                 return tmp_file.name
@@ -1136,17 +1162,6 @@ def main():
         | Neutral | 0% | Normal | Balanced |
         """)
     
-    # Load emotion model (will be cached, so first load may take time)
-    # Don't block health check - model loads asynchronously
-    classifier = None
-    try:
-        # Load model (cached, so subsequent loads are fast)
-        classifier = load_emotion_model()
-    except Exception as e:
-        # Don't crash if model fails to load - user can retry
-        st.warning(f"⚠️ Model loading failed. Will retry when needed. Error: {str(e)}")
-        classifier = None
-    
     # Main content area
     col1, col2 = st.columns([1, 1])
     
@@ -1212,6 +1227,16 @@ def main():
         st.subheader("🎭 Emotion Analysis")
         
         if st.button("🔍 Analyze Emotions", type="primary", use_container_width=True):
+            # Load emotion model on demand to avoid slow startups
+            with st.spinner("Loading emotion detection model..."):
+                try:
+                    classifier = load_emotion_model()
+                except Exception as e:
+                    classifier = None
+                    st.error(f"Failed to load emotion model: {e}")
+            if classifier is None:
+                st.error("Emotion model is unavailable right now. Please check your internet connection and try again.")
+                st.stop()
             if not text_input or len(text_input.strip()) == 0:
                 st.warning("Please enter some text first!")
             else:
