@@ -1,6 +1,6 @@
 [server]
-# headless is set to true for Streamlit Cloud compatibility
-# Local scripts override this with --server.headless=false to auto-open browser
+# Set to true for Streamlit Cloud compatibility
+# Local scripts override this with --server.headless=false flag
 headless = true
 port = 8501
 enableCORS = false
