@@ -4,16 +4,12 @@ Write-Host " Emotion-Aware Text-to-Speech Tutor" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Starting Streamlit app..." -ForegroundColor Yellow
-Write-Host "The app will open automatically in your browser!" -ForegroundColor Green
+Write-Host "The app will open automatically in your default browser!" -ForegroundColor Green
 Write-Host ""
-
-# Set Edge as default browser for this session
-$env:BROWSER = "msedge"
-
 Write-Host "Press Ctrl+C to stop the app" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Run Streamlit (it will automatically open in browser)
+# Run Streamlit (it will automatically open in default browser)
 streamlit run app.py --server.headless=false --browser.gatherUsageStats=false
 

@@ -1,15 +1,12 @@
-# PowerShell script to run Streamlit app in Microsoft Edge
+# PowerShell script to run Streamlit app
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Emotion-Aware Text-to-Speech Tutor" -ForegroundColor Green
-Write-Host " Opening in Microsoft Edge" -ForegroundColor Cyan
+Write-Host " Opening in your default browser" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Set Edge as the browser
-$env:BROWSER = "msedge"
-
 Write-Host "Starting Streamlit app..." -ForegroundColor Yellow
-Write-Host "The app will open automatically in Microsoft Edge!" -ForegroundColor Green
+Write-Host "The app will open automatically in your default browser!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Press Ctrl+C to stop the app" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
@@ -22,12 +19,12 @@ $streamlitProcess = Start-Process -FilePath "streamlit" -ArgumentList "run", "ap
 Write-Host "Waiting for server to start..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 
-# Open in Microsoft Edge
-Write-Host "Opening in Microsoft Edge..." -ForegroundColor Green
-Start-Process "msedge" -ArgumentList "http://localhost:8501"
+# Open in default browser (Streamlit should do this automatically, but ensure it opens)
+Write-Host "Opening in your default browser..." -ForegroundColor Green
+Start-Process "http://localhost:8501"
 
 Write-Host ""
-Write-Host "App is running in Microsoft Edge!" -ForegroundColor Green
+Write-Host "App is running in your default browser!" -ForegroundColor Green
 Write-Host "URL: http://localhost:8501" -ForegroundColor Cyan
 Write-Host ""
 
